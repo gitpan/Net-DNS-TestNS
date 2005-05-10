@@ -1,0 +1,12 @@
+Changes
+MANIFEST
+Makefile.PL
+README
+TestNS.pm
+t/00-pod.t
+t/00-version.t
+t/1.t
+t/testconf.xml
+t/testconf2.xml
+t/testconf3.xml
+META.yml                                 Module meta-data (added by MakeMaker)
