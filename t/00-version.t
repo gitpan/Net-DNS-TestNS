@@ -1,4 +1,4 @@
-# $Id: 00-version.t,v 1.1.1.1 2004/02/26 14:10:01 olaf Exp $
+# $Id: 00-version.t 315 2005-05-30 10:38:00Z olaf $
 
 use Test::More;
 use File::Spec;

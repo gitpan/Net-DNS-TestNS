@@ -1,21 +1,24 @@
-# Before `make install' is performed this script should be runnable with
+# Before `make install' is performed this script should be runnable with  -*-perl-*-
 # `make test'. After `make install' it should work as `perl 1.t'
+
+
+# This is exactly the same test config as t/1.t except that it uses
+# the new config file format.
 
 #########################
 
+use Data::Dumper;
 
 
 use Test::More tests => 23;
-BEGIN { use_ok('NCC::DNS::TestNS') };
+BEGIN { use_ok('Net::DNS::TestNS') };
 
 
 
-ok ($server=NCC::DNS::TestNS->new("t/testconf.xml",{
+ok ($server=Net::DNS::TestNS->new("t/testconf4.xml",{
 	Verbose => 1,
   }	),
 	"Server object created");
-
-
 
 
 
@@ -26,6 +29,11 @@ ok (my $res=Net::DNS::Resolver->new(nameservers => ['127.0.0.1'],
 
 "Resolver object created");
 
+$res->print;
+
+
+
+
 ok ($server->verbose, "Verbose is being set");
 $server->verbose(0);
 ok  (!$server->verbose, "Verbose is toggled off");
@@ -34,6 +42,7 @@ ok  ($server->verbose, "Verbose is toggled on");
 $server->verbose(0); # Otherwise the test script will be confused
 
 $server->run;
+
 my $packet=$res->send("bla.foo","ANY");
 ok ($packet->header->aa, "aa bit set on the answer");
 ok (! $packet->header->ad, "ad bit not set on the answer");
@@ -46,26 +55,32 @@ ok ($packet->additional == 0, "Empty additional section");
 
 
 undef $packet;
-$packet=$res->send("bla.foo","TXT");
+
+my $packet2=$res->send("bla.foo","TXT");
+
+
 my $check=[
-	 Net::DNS::RR->new('bla.foo. 3600	IN	TXT	"TEXT"'),
-Net::DNS::RR->new('bla.foo.		3600	IN	TXT	"Other text" ')
+	   Net::DNS::RR->new('bla.foo. 3600	IN	TXT	"TEXT"'),
+	   Net::DNS::RR->new('bla.foo.		3600	IN	TXT	"Other text" ')
 	   ];
 
-use Data::Dumper;
 
 
-is ($check->[0]->string,($packet->answer)[0]->string,"First Answer RR equals");
-is ($check->[1]->string,($packet->answer)[1]->string,"Second Answer RR equals");
+
+is ($check->[0]->string,($packet2->answer)[0]->string,"First Answer RR equals");
+is ($check->[1]->string,($packet2->answer)[1]->string,"Second Answer RR equals");
 
 
 #NXDOMAIN but two answers...
-$res->port(5355);
-$packet=$res->send("bla.foo","TXT");
 
-ok (!$packet->header->aa, "aa bit not set on the answer");
-ok ( $packet->header->ad, "ad bit set on the answer");
-ok ( $packet->header->ra, "ra bit set on the answer");
+$res->debug(1);
+$res->port(5355);
+
+my $packet3=$res->send("bla.foo","TXT");
+
+ok (!$packet3->header->aa, "aa bit not set on the answer");
+ok ( $packet3->header->ad, "ad bit set on the answer");
+ok ( $packet3->header->ra, "ra bit set on the answer");
 
 
 
@@ -75,22 +90,18 @@ Net::DNS::RR->new('bla.foo.		3600	IN	TXT	"From port 5355" ')
 	   ];
 
 
-is ($packet->header->rcode,"NXDOMAIN", "RCODE set to NXDOMAIN");
-is ($check->[0]->string,($packet->answer)[0]->string,"First Answer RR equals");
-is ($check->[1]->string,($packet->answer)[1]->string,"Second Answer RR equals");
+is ($packet3->header->rcode,"NXDOMAIN", "RCODE set to NXDOMAIN");
+is ($check->[0]->string,($packet3->answer)[0]->string,"First Answer RR equals");
+is ($check->[1]->string,($packet3->answer)[1]->string,"Second Answer RR equals");
 
 
 
 $server->medea;
 
-is ( NCC::DNS::TestNS->new("t/testconf3.xml",{
+is ( Net::DNS::TestNS->new("t/testconf3.xml",{
 	Verbose => 1,
  }	), 0,"Broken config file failed object creation");
 		
-is ( $NCC::DNS::TestNS::errorcondition, "Could not open t/broken during preporcessing", "Errorcondition set appropriatly");	
+is ( $Net::DNS::TestNS::errorcondition, "Could not open t/broken during preporcessing", "Errorcondition set appropriatly");	
 
 
-
-
-
-#$id$

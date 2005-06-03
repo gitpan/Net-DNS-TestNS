@@ -22,29 +22,39 @@ our @EXPORT_OK = qw (
 );
 
 our @EXPORT = qw(
-	
+
 );
 
-use vars qw( $AUTOLOAD $VERSION $errorcondition);
-$VERSION = do{my@r=q$Revision: 1.6 $=~/\d+/g;sprintf '%d.'.'%02d'x$#r,@r};
 
-
-
-   
-use Net::DNS::Nameserver;
+use vars qw( $AUTOLOAD 
+	     $LastRevision 
+	     $VERSION 
+	     $errorcondition
+	     $TESTNS_DTD
+	     $TESTNS_DTD_0
+	     $TESTNS_DTD_1_0
+);
+$VERSION = (qw$LastChangedRevision: 349 $)[1];
+	       
+	       
+	       
+use Net::DNS::TestNS::Nameserver;
 use Net::DNS;
 
-
-
-use constant ANS=>0;
-use constant AUT=>1;
-use constant ADD=>2;
-use constant RCODE=>3;
-use constant HEADER=>4;
    
 my $verbose=0;
-	    
 
+
+
+
+
+
+sub get_dtd {
+    return $TESTNS_DTD;
+}	    
+
+
+	    
 sub new {
     my $class = shift;
     my $self = {};
@@ -53,34 +63,49 @@ sub new {
 
     $self->{servercount}=0;
     $self->{verbose} = ${$params}{Verbose} || $verbose;
+    $self->{validate} = 1;
+    $self->{validate} = ${$params}{Validate} if defined ${$params}{Validate};
 
 
-   if (! $configfile){
-    $errorcondition="No config file specified" ;
-    return 0;
-}
-if (! -f $configfile){
-    $errorcondition="$configfile does not exist" ;
-    return 0;
-}
-my $docstring;
-
-$docstring=$self->_preprocess_input("",$configfile);
-
-return 0 unless $docstring;
-
+    if (! $configfile){
+	$errorcondition="No config file specified" ;
+	return 0;
+    }
+    if (! -f $configfile){
+	$errorcondition="$configfile does not exist" ;
+	return 0;
+    }
+    
+    my $docstring;
+    
+    $docstring=$self->_preprocess_input("",$configfile);
+    
+    return 0 unless $docstring;
+    
     my $parser=XML::LibXML->new();
-    $parser->validation(1); 
-    $parser->pedantic_parser(1); 
+
+
 
     my $doc=$parser->parse_string($docstring);
 
 
-
     my $root=$doc->getDocumentElement; 
+    my $DTD_version=$root->findvalue('@version');
+    my $dtd_str=$TESTNS_DTD_0 if ! $DTD_version;  
+    $dtd_str=$TESTNS_DTD_1_0 if $DTD_version eq "1.0"; 
+    carp "Could not determine DTD version from configuration file" unless $dtd_str;
+    my $dtd= XML::LibXML::Dtd->parse_string($dtd_str);
+    $doc->validate($dtd) if  $self->{'validate'};
+
+    print STDERR "Warning version not defined assuming version 0 of the DTD.\n".
+      Carp::shortmess ."\n"
+	unless 	$DTD_version;
+
     my $servercount=0;
+
     foreach my $server ($root->findnodes('server')){
 	my %answerdb;
+
 	my $ip=$server->findvalue('@ip');
 	my $port=$server->findvalue('@port');
 	print "---------Server $ip ($port) ----------------\n" if $self->{verbose};
@@ -102,68 +127,157 @@ return 0 unless $docstring;
 		   #next;
 	       }
 	      
-
-
 	      print "<qname,qtype>=$query_name,$query_type\n" if $self->{verbose};
-	      $answerdb{$query_name}->{$query_type}->{'rcode'}=
-		  $qtype->findvalue('@rcode');
-	      $answerdb{$query_name}->{$query_type}->{'header'}->{"aa"}= 
-		  $qtype->findvalue('@aa');
-	      $answerdb{$query_name}->{$query_type}->{'header'}->{"ad"}= 
-		  $qtype->findvalue('@ad');
-	      $answerdb{$query_name}->{$query_type}->{'header'}->{"ra"}= 
-		  $qtype->findvalue('@ra');
+
 	      my $delay= $qtype->findvalue('@delay');
-
-  	     
 	      $answerdb{$query_name}->{$query_type}->{'delay'}=0;
-
+	      
 	      if ($delay=~/^\d+$/){
 		  $answerdb{$query_name}->{$query_type}->{'delay'}=$delay ;
 	      }
 	      
-	      foreach my $ans ($qtype->findnodes('ans')){
-		  my $rr_string=$ans->findvalue(".");
-  		  $rr_string =~s/\n//g;
-		  next if $rr_string =~ /^\s*$/;
-		  my $ans_rr= Net::DNS::RR->new( $rr_string );
-		  if ($ans_rr){
-		      push @{$answerdb{$query_name}->{$query_type}->{'answer'}}, $ans_rr;
-		  }else{
-		      $errorcondition= " Could not parse $rr_string\n";
-		      return 0;
+	      if (! $DTD_version){
+		  $answerdb{$query_name}->{$query_type}->{'rcode'}=
+		      $qtype->findvalue('@rcode');
+		  $answerdb{$query_name}->{$query_type}->{'header'}->{"aa"}= 
+		      $qtype->findvalue('@aa');
+		  $answerdb{$query_name}->{$query_type}->{'header'}->{"ad"}= 
+		      $qtype->findvalue('@ad');
+		  $answerdb{$query_name}->{$query_type}->{'header'}->{"ra"}= 
+		      $qtype->findvalue('@ra');
+	      } else {
+		  my @header= $qtype->findnodes('header');
+		  carp "Other than one header node" if scalar @header != 1;
+		  {
+		      my @rcode=$header[0]->findnodes('rcode');
+		      carp "Other than one rcode node" if scalar @rcode != 1;
+		      my $rcode_val=$rcode[0]->findvalue('@value');
+		      croak "No rcode found" unless $rcode_val;
+		      print "RCODE: $rcode_val\n" if $self->{verbose};
+		      $answerdb{$query_name}->{$query_type}->{'rcode'}= $rcode_val;
 		  }
-	      }
-	      foreach my $ans ($qtype->findnodes('aut')){
-		  my $rr_string=$ans->findvalue(".");
-		  next if $rr_string =~ /^\s*$/;
-		  $rr_string =~s/\n//g;
-		  my $ans_rr= Net::DNS::RR->new( $rr_string );
-		  if ($ans_rr){
-		      push @{$answerdb{$query_name}->{$query_type}->{'authority'}}, $ans_rr;
-		  }else{
-		      $errorcondition= " Could not parse $rr_string\n";
-		      return 0;
+		  
+		  # Parse the required fields
+		  foreach my $headerfield qw( aa  ra ){
+		      my @fields=$header[0]->findnodes($headerfield);
+		      carp "Only one $headerfield node is allowed" if scalar @fields != 1;
+		      my $field_val=$fields[0]->findvalue('@value');
+		      croak "No $headerfield value found" unless defined $field_val;
+		      print uc($headerfield).": $field_val\n" if $self->{verbose};
+		      $answerdb{$query_name}->{$query_type}->{'header'}->{$headerfield}= $field_val;
 		  }
-	      }
-	      foreach my $ans ($qtype->findnodes('add')){
-		  my $rr_string=$ans->findvalue(".");
-		  next if $rr_string =~ /^\s*$/;
-		  $rr_string =~s/\n//g;
-		  my $ans_rr= Net::DNS::RR->new( $rr_string );
-		  if ($ans_rr){
-		      push @{$answerdb{$query_name}->{$query_type}->{'additional'}}, $ans_rr;
-		  }else{
-		      $errorcondition= " Could not parse $rr_string\n";
-		      return 0;
+		  
+		  
+		  # Parse the non-required fields
+		  foreach my $headerfield qw( ad cd qr rd tc id qdcount ancount nscount adcount){
+		      my @fields=$header[0]->findnodes($headerfield);
+		      next unless @fields;
+		      carp "More than one $headerfield node is allowed" if scalar @fields != 1;
+		      my $field_val=$fields[0]->findvalue('@value');
+		      print uc($headerfield).": $field_val\n" if $self->{verbose};
+		      $answerdb{$query_name}->{$query_type}->{'header'}->{$headerfield}= $field_val;
 		  }
-	      }
+
+
+
+	      } # End DTD_VERSION specific parsing.
+	      my @raw=$qtype->findnodes('raw');
+
+	      if (@raw){
+		  my $rawhex=$raw[0]->findvalue(".");
+		  $rawhex =~s/\s*//g;
+		  my $packetdata=pack("H*",$rawhex);
+		  $answerdb{$query_name}->{$query_type}->{'raw'}=$packetdata;
+	      }else{
+		  # not @raw, which should be the default for DTD version 0.
+		  foreach my $ans ($qtype->findnodes('ans')){
+		      my $rr_string=$ans->findvalue(".");
+		      $rr_string =~s/\n//g;
+		      next if $rr_string =~ /^\s*$/;
+		      my $ans_rr= Net::DNS::RR->new( $rr_string );
+		      if ($ans_rr){
+			  push @{$answerdb{$query_name}->{$query_type}->{'answer'}}, $ans_rr;
+		      }else{
+			  $errorcondition= " Could not parse $rr_string\n";
+			  return 0;
+		      }
+		  }
+		  foreach my $ans ($qtype->findnodes('aut')){
+		      my $rr_string=$ans->findvalue(".");
+		      next if $rr_string =~ /^\s*$/;
+		      $rr_string =~s/\n//g;
+		      my $ans_rr= Net::DNS::RR->new( $rr_string );
+		      if ($ans_rr){
+			  push @{$answerdb{$query_name}->{$query_type}->{'authority'}}, $ans_rr;
+		      }else{
+			  $errorcondition= " Could not parse $rr_string\n";
+			  return 0;
+		      }
+		  }
+		  foreach my $ans ($qtype->findnodes('add')){
+		      my $rr_string=$ans->findvalue(".");
+		      next if $rr_string =~ /^\s*$/;
+		      $rr_string =~s/\n//g;
+		      my $ans_rr= Net::DNS::RR->new( $rr_string );
+		      if ($ans_rr){
+			  push @{$answerdb{$query_name}->{$query_type}->{'additional'}}, $ans_rr;
+		      }else{
+			  $errorcondition= " Could not parse $rr_string\n";
+			  return 0;
+		      }
+		  }
+
+		  if ( my @opt=($qtype->findnodes('opt'))){
+		      my $optrr;
+		      
+		      
+		      my $size=$opt[0]->findvalue('@size');
+		      die "Sorry $size should be specified" unless defined $size;
+
+		      my @flag=$opt[0]->findnodes('flag');
+		      my $ednsflags=pack("n",0);
+		      if (@flag) {
+			  my $flagvalue=$flag[0]->findvalue('@value');
+			  if ($flagvalue =~ /^\s*\d+\s*$/){
+			      $ednsflags=$flagvalue;
+			  }elsif($flagvalue =~ /\s*0x(.+)\s*/i){
+			      $ednsflags=
+				  unpack("n",pack("H*",$1));
+
+			  }else{
+			      die "Sorry I could not parse $flagvalue\n";
+			  }
+
+
+			  print "EDNSFLAGS: ". sprintf("0x%04x", $ednsflags) ."\n" if $self->{'verbose'};
+			  
+		      }else{
+                          # Since we only have one option we'll do an
+                          # assignment.
+			  my @options=$opt[0]->findnodes("options");
+			  my $dobit=$options[0]->findvalue('@do');
+			  $ednsflags = 0x8000 if $dobit;
+		      }
+		      
+		      $optrr= Net::DNS::RR->new(
+						Type         => 'OPT',
+						Name         => '',
+						Class        => $size,  # Decimal UDPpayload
+						ednsflags    => $ednsflags, # first bit set see RFC 3225 
+						);
+
+		      push @{$answerdb{$query_name}->{$query_type}->{'additional'}}, $optrr;
+
+		  }
+	      } # end not @raw
+
 	  }
-			    
-
-	    
-	}
-
+	      
+	      
+	      
+	  }
+	
+	
 	# The XML has been parsed and all info sits in the %answer db..
 	# We now construct the reply handler using that.
 	my $reply_handler = sub {
@@ -171,46 +285,54 @@ return 0 unless $docstring;
 	    $qname.="." if $qname !~ /\.$/;
 	    my ($rcode, @ans, @auth, @add);
 	    if ( exists $answerdb{$qname}->{$qtype}){
-		
-
 		$rcode= $answerdb{$qname}->{$qtype}->{'rcode'}; 
-		my $foo= { 
+		my $transporthash= { 
 		    'aa' => 
 			$answerdb{$qname}->{$qtype}->
-			    {'header'}->{'aa'},
-		    'ra' => 
+		    {'header'}->{'aa'},
+			'ra' => 
 			$answerdb{$qname}->{$qtype}->
-			    {'header'}->{'ra'},
-			    
-		    'ad' => 
-			$answerdb{$qname}->{$qtype}->
-			    {'header'}->{'ad'},
-				    
-			};
-
+		    {'header'}->{'ra'},
+		    };
+		
+		foreach my $headerfield qw(aa qr ad rd tc id cd
+					   qdcount ancount nscount arcount ){
+		    $transporthash->{$headerfield}= $answerdb{$qname}->{$qtype}->
+		    {'header'}->{$headerfield} if defined 
+		    $answerdb{$qname}->{$qtype}->{'header'}->{$headerfield} ;
+		}
+		
 		print "Sleeping for " . $answerdb{$qname}->{$qtype}->{'delay'} 
 		. " seconds " 
 		    if $self->{verbose} && $answerdb{$qname}->{$qtype}->{'delay'};
-
+		
 		sleep ($answerdb{$qname}->{$qtype}->{'delay'});
-
-
+		
+		if (defined($answerdb{$qname}->{$qtype}->{'raw'})){
+		    $transporthash->{'raw'}=$answerdb{$qname}->{$qtype}->{'raw'};
+		}
+		
+		
 		return ($rcode, $answerdb{$qname}->{$qtype}->{'answer'},
 			$answerdb{$qname}->{$qtype}->{'authority'},
 			$answerdb{$qname}->{$qtype}->{'additional'},
-			$foo);
+			$transporthash);
 		
 	    }
 	    
 	    return ("SERVFAIL");
 	};
 	print "Setting up server for: $ip,$port\n" if $self->{verbose};
-	my $ns = Net::DNS::Nameserver->new(
-					   LocalPort	   => $port,
-					   LocalAddr           => $ip,
-					   ReplyHandler => $reply_handler,
-					   Verbose	   => $self->{verbose},
-					   );
+
+
+	my $ns; 
+	$ns= Net::DNS::TestNS::Nameserver->new(
+				       LocalPort	   => $port,
+				       LocalAddr           => $ip,
+				       ReplyHandler => $reply_handler,
+				       Verbose	   => $self->{verbose},
+				       );
+	
 
 	if (! $ns ){
 	    $errorcondition="Could not create Nameserver object";
@@ -387,35 +509,183 @@ sub AUTOLOAD {
 
 
 
-my $TESTNS_DTD='
-<!DOCTYPE testns [
-	<!ELEMENT testns (server*)>
-	<!-- Root element  has required IP and PORT attribute        -->
-	<!ELEMENT server (qname?)>
-	<!ATTLIST server ip  CDATA #REQUIRED>
-	<!ATTLIST server port  CDATA #REQUIRED>
-	<!-- A server has answers for a number of possible QNAME QTYPE questions -->
 
 
-        <!-- A QNAME should be fully specified -->
-	<!ELEMENT qname (qtype*)>
 
-        <!ATTLIST qname name CDATA #REQUIRED>
-	<!ELEMENT qtype (ans+,aut+,add+)>
-        <!ATTLIST qtype type CDATA #REQUIRED>
-        <!ATTLIST qtype rcode CDATA #REQUIRED>
-        <!ATTLIST qtype aa (1|0)  #REQUIRED>
-        <!ATTLIST qtype ra (1|0)  #REQUIRED>
-        <!ATTLIST qtype ad (1|0)  #REQUIRED>
-	<!ATTLIST qtype delay CDATA "0" >
-	<!--  Each of these contain one RR. -->
-	<!ELEMENT ans (#PCDATA) >
-	<!ELEMENT aut (#PCDATA) >
-	<!ELEMENT add (#PCDATA) >
-]>
+BEGIN {
+    $TESTNS_DTD_0='
+     <!ELEMENT testns (server*)>
+
+
+     <!-- Root element has required IP and PORT attribute -->
+     <!ELEMENT server (qname?)>
+     <!ATTLIST server ip  CDATA #REQUIRED>
+     <!ATTLIST server port  CDATA #REQUIRED>
+
+     <!-- A server has answers for a number of possible   -->
+     <!-- QAME QTYPE questions                            -->
+     <!-- A QNAME should be fully specified               -->
+
+     <!ELEMENT qname (qtype*)>
+
+     <!ATTLIST qname name CDATA #REQUIRED>
+     <!ELEMENT qtype ((ans+,aut*,add*)|(ans*,aut+,add*)
+                     |(ans*,aut*,add+))>
+     <!ATTLIST qtype type CDATA #REQUIRED>
+     <!ATTLIST qtype rcode CDATA #REQUIRED>
+     <!ATTLIST qtype aa (1|0)  #REQUIRED>
+     <!ATTLIST qtype ra (1|0)  #REQUIRED>
+     <!ATTLIST qtype ad (1|0)  #REQUIRED>
+     <!ATTLIST qtype delay CDATA "0" >
+     <!--  Each of these contain one RR. -->
+     <!ELEMENT ans (#PCDATA) >
+     <!ELEMENT aut (#PCDATA) >
+     <!ELEMENT add (#PCDATA) >
 ';
 
 
+# Note: generateDTDpod.pl asumes the DTD is stored as $TESNS_DTD and
+# has a rather "loose" way to determine the begin and the end of the
+# string.  Start: if (s/\$TESTNS_DTD=\'//){ End: if (s/\'\;//){
+
+    $TESTNS_DTD='
+
+ <!-- The testns DTD has "testns" as root element         -->
+ <!-- It has a version number that is enforced by the DTD -->
+ <!-- You are currently looking at version 0.01 of the    -->
+ <!-- DTD.                                                -->
+ <!-- it contains one or more server elements             -->
+
+ <!ELEMENT testns (server+)>
+ <!ATTLIST testns  version CDATA #FIXED "1.0">
+
+ <!-- The server requieres an ip and a port attribute     -->
+ <!-- these define to which IP/PORT combination the       -->
+ <!-- server  should bind to                              -->
+
+ <!-- The server will respond to particular QNAME/QTYPE   -->
+ <!-- queries. These are enumerated in the qname elements -->
+ <!-- that hang of this server                            -->
+
+ <!ELEMENT server (qname+)>
+ <!ATTLIST server ip  CDATA #REQUIRED>
+ <!ATTLIST server port  CDATA #REQUIRED>
+
+
+ <!-- A server has answers for a number of possible       -->
+ <!-- QNAME QTYPE questions.                              -->
+
+ <!-- A QNAME name attribute should be fully specified    -->
+ <!--  domain name.                                       -->
+
+  <!ELEMENT qname (qtype*)>
+  <!ATTLIST qname name CDATA #REQUIRED>
+
+  <!-- each qtype element contains a DNS packet           -->
+  <!-- specification.                                     -->
+  
+  <!-- First specify the header and then then choose      -->
+  <!-- to specify an hexadecimal dump of the packet (raw) -->
+  <!-- or define all the sections one by one              -->
+
+  <!ELEMENT qtype (header,
+                   ((question?,ans*,aut*,add*,opt?)
+                    |raw)
+                   )>
+
+  <!ATTLIST qtype type CDATA #REQUIRED>
+  <!ATTLIST qtype delay CDATA "0" >
+
+
+
+   <!ELEMENT header (rcode,aa,ra,
+                     ad?, cd?, qr?,rd?,tc?,id?,
+                     qdcount?,ancount?,nscount?,arcount?)>
+
+ 
+     <!-- These are all the header elements that can be   -->
+     <!-- modified with this code                         -->
+     <!ELEMENT rcode EMPTY>
+       <!ATTLIST rcode value CDATA #REQUIRED>
+     <!ELEMENT aa EMPTY>
+       <!ATTLIST aa value (1|0)  #REQUIRED>
+     <!ELEMENT ra EMPTY>
+       <!ATTLIST ra value (1|0)  #REQUIRED>
+     <!ELEMENT ad EMPTY>
+       <!ATTLIST ad value (1|0)  #REQUIRED>
+     <!ELEMENT cd EMPTY>
+       <!ATTLIST cd value (1|0)  #REQUIRED>
+
+     <!ELEMENT qr EMPTY>
+       <!ATTLIST qr value (1|0)  #REQUIRED>
+     <!ELEMENT rd EMPTY>
+       <!ATTLIST rd value (1|0)  #REQUIRED>
+     <!ELEMENT tc EMPTY>
+       <!ATTLIST tc value (1|0)  #REQUIRED>
+
+     <!ELEMENT id EMPTY>
+       <!ATTLIST id value CDATA  #REQUIRED>
+     <!ELEMENT qdcount EMPTY>
+       <!ATTLIST qdcount value CDATA  #REQUIRED>
+     <!ELEMENT ancount EMPTY>
+       <!ATTLIST ancount value CDATA  #REQUIRED>
+     <!ELEMENT nscount EMPTY>
+       <!ATTLIST nscount value CDATA  #REQUIRED>
+     <!ELEMENT arcount EMPTY>
+       <!ATTLIST arcount value CDATA  #REQUIRED>
+
+     <!--  Each of these contain "One RR" in zonefile    -->
+     <!--  format.                                       -->
+     <!--  See Net::DNS::Question for format of the      -->
+     <!--  question section                              -->
+     <!ELEMENT question (#PCDATA) >
+
+     <!ELEMENT ans (#PCDATA) >
+     <!ELEMENT aut (#PCDATA) >
+     <!ELEMENT add (#PCDATA) >
+     <!--  question section                              -->
+     <!-- The OPT RR is used for EDNSO purposes          -->
+     <!-- It contains a size attribute that is used to   -->
+     <!-- negotiate packet sizes                         -->
+     <!-- It has either a flag or an options element     -->
+     <!-- included                                       -->
+
+     <!ELEMENT opt (flag|options)>
+     <!ATTLIST opt size CDATA  #REQUIRED>
+
+     <!-- The flag element has a data attribute that     -->
+     <!-- contains a 2byte value that sets the flags     -->
+     <!-- alternatively you can use the options          -->
+     <!-- element to set these flags                     -->
+     <!-- <options do=1/> is equivalent to               -->
+     <!-- <flag value="0x8000" />                        -->
+
+     <!ELEMENT flag EMPTY>
+     <!ATTLIST flag value CDATA  #REQUIRED>
+
+     <!ELEMENT options EMPTY>
+     <!ATTLIST options do (1|0)  #REQUIRED>
+
+     <!--  The raw elemet is to contain a hexadecimal    -->
+     <!--  representation of the packet. Whitespaces and -->
+     <!--  XML comments are ignored.                     -->
+     <!--  The raw element should contain all sections,  -->
+     <!--  including the question section but does not   -->
+     <!--  include header information.                   -->
+     <!--  Take care that the header information is      -->
+     <!--  consistent with the packet content.           -->
+     <!ELEMENT raw (#PCDATA) >
+
+
+     <!-- This DTD has been generated from               -->
+     <!-- Net::DNS::TestNS   $LastChangedRevision: 349 $ -->
+
+
+';
+
+    $TESTNS_DTD_1_0=$TESTNS_DTD;
+
+} #END BEGIN
 
 
 
@@ -423,14 +693,6 @@ my $TESTNS_DTD='
 
 
 
-
-# Preloaded methods go here.
-
-# Autoload methods go after =cut, and are processed by the autosplit program.
-
-1;
-__END__
-# Below is stub documentation for your module. You'd better edit it!
 
 =head1 NAME
 
@@ -459,12 +721,11 @@ return a SERVFAIL.
 A log will be written to STDERR it contains time, IP/PORT, QNAME,
 QTYPE, RCODE
 
-
-
 =head2 Configuration file
 
-Thew class uses an XML file to read its configuration. The DTD can be
-obtained through the variable $Net::DNS::TestNS::TESTNS_DTD.
+The class uses an XML file to read its configuration. The DTD is documented
+in L<Net::DNS::TestNS::DTD>.
+
 
 The setup is split in a number of servers, each with a unique IP/port
 number, each server has 1 or more QNAMEs it will respond to. Each
@@ -488,7 +749,8 @@ configuration a SERVFAIL is returned.
 
 
     my $server=Net::DNS::TestNS->new($configfile, {
-	Verbose => 1,
+     Verbose => 1,
+        Validate => 1,
     });
 
 
@@ -499,7 +761,15 @@ other XML configuration fragments.
 
 The second optional argument is hash that contains customization parameters.
     Verbose  boolean     Makes the code more verbose.
-    
+    Validate boolean     Turns on XML validation based 
+                         on the DTD
+                         The parser is flexible with 
+                         respect to the ordering 
+                         of some of the XML elements. 
+                         The DTD is not.
+                         Validation is on by default.                      
+
+
 
 new returns the object reference on success and 0 on failure. On
 failure the class variable $Net::DNS::TestNS::errorcondition is set.
@@ -523,99 +793,68 @@ instance.  Also known by its alias 'stop'.
 
 =head1 Configuration file example
 
-<?xml version="1.0"?>
 
-<!-- DTD is in-line and obligatory -->
-
- <!DOCTYPE testns [
-	<!ELEMENT testns (server*)>
-	<!-- Root element  has required IP and PORT attribute        -->
-	<!ELEMENT server (qname?)>
-	<!ATTLIST server ip  CDATA #REQUIRED>
-	<!ATTLIST server port  CDATA #REQUIRED>
-	<!-- A server has answers for a number of possible QNAME QTYPE questions -->
-
-
-        <!-- A QNAME should be fully specified -->
-	<!ELEMENT qname (qtype*)>
-        <!ATTLIST qname name CDATA #REQUIRED>
-	<!ELEMENT qtype (ans*,aut*,add*)>
-        <!ATTLIST qtype type CDATA #REQUIRED>
-        <!ATTLIST qtype rcode CDATA #REQUIRED>
-        <!ATTLIST qtype aa (1|0)  #REQUIRED>
-        <!ATTLIST qtype ra (1|0)  #REQUIRED>
-        <!ATTLIST qtype ad (1|0)  #REQUIRED>
-	<!ATTLIST qtype delay CDATA "0" >
-	<!--  Each of these contain one RR. -->
-	<!ELEMENT ans (#PCDATA) >
-	<!ELEMENT aut (#PCDATA) >
-	<!ELEMENT add (#PCDATA) >
-		       ]>
-
-
-
-<!-- Start of the configuration -->
-
-<testns>
-
-<!-- First server -->
-
-<server ip="127.0.0.1" port="5354">
-  <qname name="bla.foo">
-    <!-- bla.foo ANY returns a formerr -->
-    <qtype type="ANY" rcode="FORMERR"  aa="1" ra="0" ad="0" >
-      </qtype>
-    <!-- bla.foo TXT returns two RRs in the answer section -->
-    <qtype type="TXT" rcode="NOERROR"  aa="1" ra="0" ad="1" >
-       <ans>
-       bla.foo.		3600	IN	TXT	"TEXT"
-       </ans>
-       <ans>
-       bla.foo.		3600	IN	TXT	"Other text"  
-       </ans>
-    </qtype>
-
-    <!-- bla.foo A Returns extra crap in the additional section -->
-    <qtype type="A" rcode="NOERROR"  aa="1" ra="0" ad="1" >   
+<?xml version="1.0" standalone="no"?>
+ <testns version="1.0">
+ <server ip="127.0.0.1" port="5354">
+   <qname name="bla.foo">
+     <qtype type="TXT" delay="1">
+      <header>
+        <rcode value="NOERROR"/>
+        <aa value="1"/>
+        <ra value="0"/>
+        <ad value="0"/>
+        <qr value="0"/>
+        <tc value="1"/>
+        <id value="1234"/>
+        <ancount value="1"/>
+        <nscount value="1"/>
+      </header>
       <ans>
-      bla.foo.		3600	IN	A 10.0.0.1
+        bla.foo.  3600 IN TXT "TEXT"
       </ans>
       <ans>
-      bla.foo.		3600	IN	A 10.0.0.2
+        bla.foo.          3600     IN     TXT     "Other text"  
       </ans>
-      <ans>
-      bla.foo.		3600	IN	A 10.0.0.3
-      </ans>
-      <aut></aut>
-      <add>
-      bla.foo.		3600	IN	A 10.0.0.3
-      </add>
-    </qtype>
+     </qtype>
+   </qname>
+   <qname name="raw.foo">
+    <qtype type="TXT" delay="1">
+     <header>
+      <rcode value="NOERROR"/>
+        <aa value="1"/>
+        <ra value="0"/>
+        <ad value="0"/>
+        <qr value="0"/>
+        <tc value="1"/>
+        <id value="1234"/>
+       <ancount value="1"/>        
+      </header>
+    <raw>
+     <!-- QNAME -->
+     07 74726967676572   <!-- trigger -->
+     03 666f6f           <!-- foo -->
+     00                  <!-- closing octet  -->
+     <!-- QTYPE -->
+     00 01               <!-- A RR -->
+     <!-- QCLASS -->
+     00 01
+ 
+   <!-- Answer section -->
+
+     c0 0c               <!-- Points up -->
+     00 01               <!-- type A -->
+     00 01               <!-- class IN -->
+     00 00 00 05         <!-- ttl 5 seconds  -->
+     00 04               <!-- RD length 4 octets -->
+     0a 00 00 01         <!-- 10.0.0.1 -->
+     </raw>
+   </qtype>
   </qname>
- </server>
-
-
-
-<!-- Second server on port 5355 -->
-<server ip="127.0.0.1" port="5355">
-
-  <qname name="bla.foo">
-    <!-- a NXDOMAIN with authoritative content; does not make sense does it -->
-    <qtype type="TXT" rcode="NXDOMAIN"  aa="0" ra="1" ad="1" >
-      <ans>
-bla.foo.		3600	IN	TXT	"TEXT"
-  </ans>
-      <ans>
-bla.foo.		3600	IN	TXT	"From port 5355"
-  </ans>
-      <aut></aut>
-      <add></add>
-    </qtype>
-  </qname>
-
-
+    
  </server>
 </testns>
+
 
 =head1 Known Deficiencies and TODO
 
@@ -623,10 +862,18 @@ The module is based on Net::DNS::Nameserver. There is no way to
 distinguish if the query came over TCP or UDP; besides UDP truncation
 is not available in Net::DNS::Nameserver. 
 
+Earlier versions of this script used a different DTD that had no
+version number. The script only validates against version 1.0 of the
+DTD but parses the old files.
+
+
+==head1 ALSO SEE
+L<Net::DNS::TestNS::DTD>, L<Net::DNS>, L<Net::DNS::RR>
 
 =head1 AUTHOR
 
 Olaf Kolkman, E<lt>olaf@net-dns.org<gt>
+
 
 =head1 COPYRIGHT AND LICENSE
 
@@ -652,3 +899,9 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 
 =cut
+
+
+
+1;
+__END__
+

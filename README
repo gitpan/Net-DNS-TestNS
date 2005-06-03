@@ -1,6 +1,6 @@
-Net::DNS::TestNS version 0.01
+Net::DNS::TestNS version 1.07
 ==========================
-
+$LastChangedRevision: 349 $
 
 
 This is TestNS.pm a module to simulate some DNS behaviour. Its intended
@@ -16,14 +16,28 @@ To install this module type the following:
    make test
    make install
 
+
+
 DEPENDENCIES
 
 This module requires these other modules and libraries:
 
  XML::LibXML;
  IO::File;
- Net::DNS::Nameserver;
- Net::DNS version 0.41 or higher.
+ Net::DNS version 0.50 or higher.
+ Net::DNS::SEC (if you want to play with DNSSEC records).
+
+
+USAGE
+
+Read the perlpod, it should give you a fairly good idea of what
+is happening.
+
+The test cases in the "t/" directory should also get you on your
+way. Look at t/03.t in combination with t/testconf5.xml.
+
+
+COPYRIGHT
 
 
 Copyright (c) 2003  RIPE NCC.  Author Olaf M. Kolkman  <olaf@ripe.net>

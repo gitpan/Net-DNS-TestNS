@@ -1,13 +1,13 @@
 # http://module-build.sourceforge.net/META-spec.html
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         Net-DNS-TestNS
-version:      1.06
-version_from: TestNS.pm
+version:      1.07
+version_from: 
 installdirs:  site
 requires:
     IO::File:                      1.09
-    Net::DNS:                      0.4
+    Net::DNS:                      0.4903
     XML::LibXML:                   1.53
 
 distribution_type: module
-generated_by: ExtUtils::MakeMaker version 6.26
+generated_by: ExtUtils::MakeMaker version 6.21
