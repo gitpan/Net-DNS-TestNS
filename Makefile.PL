@@ -4,7 +4,7 @@ use ExtUtils::MakeMaker;
 # the contents of the Makefile that is written.
 WriteMakefile(
 	      'NAME'		=> 'Net::DNS::TestNS',
-	      'VERSION'	        => '1.07', # finds $VERSION
+	      'VERSION'	        => '1.08', # finds $VERSION
 	      'PREREQ_PM'		=> {
 		  Net::DNS => 0.4903,
 		    IO::File => 1.09,

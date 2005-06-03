@@ -34,7 +34,7 @@ use vars qw( $AUTOLOAD
 	     $TESTNS_DTD_0
 	     $TESTNS_DTD_1_0
 );
-$VERSION = (qw$LastChangedRevision: 349 $)[1];
+$VERSION = (qw$LastChangedRevision: 355 $)[1];
 	       
 	       
 	       
@@ -518,7 +518,7 @@ BEGIN {
 
 
      <!-- Root element has required IP and PORT attribute -->
-     <!ELEMENT server (qname?)>
+     <!ELEMENT server (qname+)>
      <!ATTLIST server ip  CDATA #REQUIRED>
      <!ATTLIST server port  CDATA #REQUIRED>
 
@@ -529,7 +529,7 @@ BEGIN {
      <!ELEMENT qname (qtype*)>
 
      <!ATTLIST qname name CDATA #REQUIRED>
-     <!ELEMENT qtype ((ans+,aut*,add*)|(ans*,aut+,add*)
+     <!ELEMENT qtype ((ans+,aut*,add*)?|(ans*,aut+,add*)
                      |(ans*,aut*,add+))>
      <!ATTLIST qtype type CDATA #REQUIRED>
      <!ATTLIST qtype rcode CDATA #REQUIRED>
@@ -678,7 +678,7 @@ BEGIN {
 
 
      <!-- This DTD has been generated from               -->
-     <!-- Net::DNS::TestNS   $LastChangedRevision: 349 $ -->
+     <!-- Net::DNS::TestNS   $LastChangedRevision: 355 $ -->
 
 
 ';
