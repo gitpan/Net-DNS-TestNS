@@ -1,14 +1,14 @@
-use 5.008;               
+use 5.008;
 use ExtUtils::MakeMaker;
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
 WriteMakefile(
 	      'NAME'		=> 'Net::DNS::TestNS',
-	      'VERSION'	        => '1.08', # finds $VERSION
+	      'VERSION'	        => '1.09', # finds $VERSION
 	      'PREREQ_PM'		=> {
-		  Net::DNS => 0.4903,
-		    IO::File => 1.09,
-		    XML::LibXML => 1.53,
+		  Net::DNS => 0.50,
+		  IO::File => 1.09,
+		  XML::LibXML => 1.53,
 		}, # e.g., Module::Name => 1.1
 	      ($] >= 5.005 ?    ## Add these new keywords supported since 5.005
 	       (ABSTRACT_FROM => 'TestNS.pm', # retrieve abstract from module
@@ -37,7 +37,7 @@ TestNS/DTD.pm: TestNS.pm Makefile generateDTDpod.pl
 	$(PERLRUN) generateDTDpod.pl > TestNS/DTD.pm
 
 
-config:: $(FIRST_MAKEFILE) TestNS/DTD.pm blibdirs
+config:: $(FIRST_MAKEFILE) TestNS/DTD.pm pm_to_blib
 	$(NOECHO) $(NOOP)
 
 

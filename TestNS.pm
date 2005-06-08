@@ -34,7 +34,7 @@ use vars qw( $AUTOLOAD
 	     $TESTNS_DTD_0
 	     $TESTNS_DTD_1_0
 );
-$VERSION = (qw$LastChangedRevision: 355 $)[1];
+$VERSION = (qw$LastChangedRevision: 368 $)[1];
 	       
 	       
 	       
@@ -529,8 +529,7 @@ BEGIN {
      <!ELEMENT qname (qtype*)>
 
      <!ATTLIST qname name CDATA #REQUIRED>
-     <!ELEMENT qtype ((ans+,aut*,add*)?|(ans*,aut+,add*)
-                     |(ans*,aut*,add+))>
+     <!ELEMENT qtype (ans*,aut*,add*)>
      <!ATTLIST qtype type CDATA #REQUIRED>
      <!ATTLIST qtype rcode CDATA #REQUIRED>
      <!ATTLIST qtype aa (1|0)  #REQUIRED>
@@ -678,7 +677,7 @@ BEGIN {
 
 
      <!-- This DTD has been generated from               -->
-     <!-- Net::DNS::TestNS   $LastChangedRevision: 355 $ -->
+     <!-- Net::DNS::TestNS   $LastChangedRevision: 368 $ -->
 
 
 ';

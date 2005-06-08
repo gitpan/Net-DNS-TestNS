@@ -1,4 +1,12 @@
-Version 1.08 public release, 3 June 2004
+Version 1.09 8 June 2005
+
+   Fixed portability issue with Makefile.PL. 
+
+   Corrected a problem with the DTD for "Version 0" (needed for
+   backward portability). 
+
+Version 1.08 public release, 3 June 2005
+
 Version 1.07 
 
   Rewrite and extention addition of many features.
@@ -36,4 +44,4 @@ Version 1.06 27 Feb 2004:
 
 
 -------
-$Id: Changes 357 2005-06-03 10:17:32Z olaf $
+$Id: Changes 368 2005-06-08 14:53:54Z olaf $
