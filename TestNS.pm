@@ -34,7 +34,7 @@ use vars qw( $AUTOLOAD
 	     $TESTNS_DTD_0
 	     $TESTNS_DTD_1_0
 );
-$VERSION = (qw$LastChangedRevision: 368 $)[1];
+$VERSION = (qw$LastChangedRevision: 461 $)[1];
 	       
 	       
 	       
@@ -107,6 +107,7 @@ sub new {
 	my %answerdb;
 
 	my $ip=$server->findvalue('@ip');
+	$ip =~ s/\s*//g;
 	my $port=$server->findvalue('@port');
 	print "---------Server $ip ($port) ----------------\n" if $self->{verbose};
 
@@ -677,7 +678,7 @@ BEGIN {
 
 
      <!-- This DTD has been generated from               -->
-     <!-- Net::DNS::TestNS   $LastChangedRevision: 368 $ -->
+     <!-- Net::DNS::TestNS   $LastChangedRevision: 461 $ -->
 
 
 ';

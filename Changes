@@ -1,3 +1,8 @@
+Version 1.10 31 December 2008
+
+   Removed sensitivity to spaces in the IP attribute.
+   Minor bug fixes in tests.
+
 Version 1.09 8 June 2005
 
    Fixed portability issue with Makefile.PL. 
@@ -44,4 +49,4 @@ Version 1.06 27 Feb 2004:
 
 
 -------
-$Id: Changes 368 2005-06-08 14:53:54Z olaf $
+$Id: Changes 771 2008-12-30 16:47:31Z olaf $

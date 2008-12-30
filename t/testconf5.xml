@@ -39,6 +39,7 @@
 	  <tc value="1"/>
 	  <id value="3456"/>
 	  <!-- These values are important when dealing with raw data -->
+	  <qdcount value="1"/> 	  
 	  <ancount value="1"/> 	  
 	</header>
 

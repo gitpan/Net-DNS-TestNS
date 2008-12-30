@@ -4,9 +4,9 @@ use ExtUtils::MakeMaker;
 # the contents of the Makefile that is written.
 WriteMakefile(
 	      'NAME'		=> 'Net::DNS::TestNS',
-	      'VERSION'	        => '1.09', # finds $VERSION
+	      'VERSION'	        => '1.10', # finds $VERSION
 	      'PREREQ_PM'		=> {
-		  Net::DNS => 0.50,
+		  Net::DNS => 0.64,
 		  IO::File => 1.09,
 		  XML::LibXML => 1.53,
 		}, # e.g., Module::Name => 1.1
